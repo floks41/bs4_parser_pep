@@ -21,18 +21,6 @@ def get_response(session, url):
         raise GetResponseException(url)
 
 
-def find_tag(soup, tag, attrs=None):
-    """Перехват ошибки поиска тегов.
-    Осуществляет поиск тега tag в объекте soup с атрибутами из словаря attrs
-    (не обязательный аргумент). Если тег не найден, логирует ошибку,
-    вызывает исключение ParserFindTagException.
-    """
-    searched_tag = soup.find(tag, attrs=(attrs or {}))
-    if searched_tag is None:
-        raise ParserFindTagException(tag, attrs)
-    return searched_tag
-
-
 def find_tag(
     soup: BeautifulSoup, tag=None, attrs=None, string=None, mode='find'
 ):
@@ -41,8 +29,8 @@ def find_tag(
     (не обязательный аргумент), строкой string. Вызывает для воиска методы
     объекта BeautifulSoup soup     в зависимости от аргумента mode:
     find - soup.find, child - soup.findChild,
-    next_sibling - soup.find_next_sibling.  Если тег не найден, логирует ошибку,
-    вызывает исключение ParserFindTagException.
+    next_sibling - soup.find_next_sibling.  Если тег не найден, логирует
+    ошибку, вызывает исключение ParserFindTagException.
     """
     function_mode = {
         'find': soup.find,
