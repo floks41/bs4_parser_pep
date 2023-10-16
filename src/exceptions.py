@@ -23,12 +23,3 @@ class WriteResultsException(Exception):
     def __init__(self, path) -> None:
         self.error_msg = f'Не удалось записать файл {path}'
         super().__init__(self.error_msg)
-
-
-class PythonVersionListNotFoundException(Exception):
-    """Вызывается, когда на странице документации не найден
-    список последний версий Python."""
-
-    def __init__(self, url) -> None:
-        self.error_msg = f'Список версий Python на странице {url} не найден.'
-        super().__init__(self.error_msg)

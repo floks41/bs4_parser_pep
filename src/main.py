@@ -15,17 +15,18 @@ from constants import (
     DOWNLOAD_DIR_NAME,
     DOWNLOADS_URL,
     EXPECTED_STATUS,
+    LI_ALL_VERSIONS_TEXT_PATTERN,
     MAIN_DOC_URL,
     PEPS_MAIN_URL,
     PYTHON_DOC_PDF_A4_URL_PATTERN,
     PYTHON_VERSIONS_LIST_PATTERN,
+    RESULT_HEADERS_TUPLES,
     UNKNOWN_STATUS_NAME,
     WHATS_NEW_URL,
 )
 from exceptions import (
     GetResponseException,
     ParserFindTagException,
-    PythonVersionListNotFoundException,
     WriteResultsException,
 )
 from outputs import control_output
@@ -36,7 +37,7 @@ EXPECTED_STATUS_LIST = tuple(
 )
 
 
-def get_responce_and_soup(session, url):
+def get_responce_and_make_soup(session, url):
     response = get_response(session, url)
     soup = BeautifulSoup(response.text, features='lxml')
     return soup
@@ -44,20 +45,21 @@ def get_responce_and_soup(session, url):
 
 def whats_new(session):
     """Разбирает станицу изменений в Python."""
-    soup = get_responce_and_soup(session, WHATS_NEW_URL)
-
+    soup = get_responce_and_make_soup(session, WHATS_NEW_URL)
     main_div = find_tag(soup, 'section', attrs={'id': 'what-s-new-in-python'})
     div_with_ul = find_tag(main_div, 'div', attrs={'class': 'toctree-wrapper'})
     sections_by_python = div_with_ul.find_all(
         'li', attrs={'class': 'toctree-l1'}
     )
 
-    results = [('Ссылка на статью', 'Заголовок', 'Редактор, Автор')]
+    results = [
+        RESULT_HEADERS_TUPLES.get('whats-new'),
+    ]
     for section in tqdm(sections_by_python):
         version_a_tag = section.find('a')
-        version_link = urljoin(WHATS_NEW_URL, version_a_tag['href'])
+        version_link = urljoin(WHATS_NEW_URL, version_a_tag.get('href'))
 
-        soup = get_responce_and_soup(session, version_link)
+        soup = get_responce_and_make_soup(session, version_link)
 
         h1_tag = find_tag(soup, 'h1')
         article_title = h1_tag.text.replace('¶', ' ')
@@ -71,20 +73,21 @@ def whats_new(session):
 
 def latest_versions(session):
     """Разбирает список версий Python."""
-    soup = get_responce_and_soup(session, MAIN_DOC_URL)
+    soup = get_responce_and_make_soup(session, MAIN_DOC_URL)
     sidebar = find_tag(soup, 'div', attrs={'class': 'sphinxsidebarwrapper'})
-    ul_tags = sidebar.find_all('ul')
-    results = [('Ссылка на документацию', 'Версия', 'Статус')]
 
-    for ul in ul_tags:
-        if 'All versions' in ul.text:
-            a_tags = ul.find_all('a')
-            break
-    else:
-        raise PythonVersionListNotFoundException(MAIN_DOC_URL)
+    results = [
+        RESULT_HEADERS_TUPLES.get('latest-versions'),
+    ]
+
+    ul = find_tag(
+        sidebar, 'li', string=re.compile(LI_ALL_VERSIONS_TEXT_PATTERN)
+    ).parent
+
+    a_tags = ul.find_all('a')
 
     for a_tag in tqdm(a_tags):
-        link = a_tag['href']
+        link = a_tag.get('href')
         text_match = re.search(PYTHON_VERSIONS_LIST_PATTERN, a_tag.text)
         if text_match is not None:
             version, status = text_match.groups()
@@ -98,7 +101,7 @@ def latest_versions(session):
 def download(session):
     """Загружает актуальную версию документации
     последеней версии Python в формате PDF."""
-    soup = get_responce_and_soup(session, DOWNLOADS_URL)
+    soup = get_responce_and_make_soup(session, DOWNLOADS_URL)
 
     main_tag = find_tag(soup, 'div', attrs={'role': 'main'})
     table_tag = find_tag(main_tag, 'table', attrs={'class': 'docutils'})
@@ -107,7 +110,7 @@ def download(session):
         'a',
         attrs={'href': re.compile(PYTHON_DOC_PDF_A4_URL_PATTERN)},
     )
-    pdf_a4_link = pdf_a4_tag['href']
+    pdf_a4_link = pdf_a4_tag.get('href')
     archive_url = urljoin(MAIN_DOC_URL, pdf_a4_link)
     filename = archive_url.split('/')[-1]
 
@@ -128,9 +131,7 @@ def download(session):
 def pep(session):
     """Разбирает список документов PEP (предложений по улучшению Python),
     подсчитывает количество документов в разрезе их стутусов."""
-    soup = get_responce_and_soup(session, PEPS_MAIN_URL)
-    # print(soup)
-    # soup.findNextSibling
+    soup = get_responce_and_make_soup(session, PEPS_MAIN_URL)
     section_tag = find_tag(
         soup=soup, tag='section', attrs={'id': 'numerical-index'}
     )
@@ -147,10 +148,10 @@ def pep(session):
         td_tag = find_tag(row, 'td')
         pep_keys = find_tag(td_tag, 'abbr').text
         pep_status_key = pep_keys[1:]
-        pep_url = urljoin(PEPS_MAIN_URL, find_tag(row, 'a')['href'])
+        pep_url = urljoin(PEPS_MAIN_URL, find_tag(row, 'a').get('href'))
         pep_list.append((pep_status_key, pep_url))
 
-        soup = get_responce_and_soup(session, pep_url)
+        soup = get_responce_and_make_soup(session, pep_url)
 
         section_tag = find_tag(soup, 'section', attrs={'id': 'pep-content'})
         dl_tag = find_tag(section_tag, 'dl')
@@ -180,9 +181,8 @@ def pep(session):
 
     total_peps_number = 0
     results = [
-        ('Статус', 'Количество'),
+        RESULT_HEADERS_TUPLES.get('pep'),
     ]
-
     for key, value in freq_dict.items():
         results.append((key, value))
         total_peps_number += value
@@ -225,7 +225,6 @@ def main():
         ParserFindTagException,
         GetResponseException,
         WriteResultsException,
-        PythonVersionListNotFoundException,
     ) as parser_exception:
         logging.error(parser_exception.error_msg)
 
